@@ -1,0 +1,20 @@
+Project Details
+Project Name,Kaytes
+Session ID,ZDA058
+Voting System,fibonacci
+
+Team Members
+Name,Role,Participation Rate (%)
+Sujan,Member,100.0
+Vicky,Host,100.0
+
+User Stories
+Title,Description,Status,Final Estimate,Average Vote,Most Frequent Vote,Individual Votes
+Dashboard,s,Completed,2,1.5,1,Sujan: 2 | Vicky: 1
+
+Summary
+Total Stories,1
+Completed Stories,1
+Average Estimate,2.0
+Start Time,2025-04-22T10:49:05.436Z
+End Time,2025-04-22T10:53:18.433Z

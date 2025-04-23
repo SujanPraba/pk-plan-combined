@@ -1,0 +1,178 @@
+{
+	"info": {
+		"_postman_id": "a1b2c3d4-e5f6-g7h8-i9j0-k1l2m3n4o5p6",
+		"name": "Planning Poker Session API",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Create Session",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"name\": \"Sprint Planning 1\",\n    \"votingSystem\": \"fibonacci\",\n    \"username\": \"John Doe\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/sessions",
+					"host": ["{{baseUrl}}"],
+					"path": ["sessions"]
+				},
+				"description": "Create a new planning poker session"
+			}
+		},
+		{
+			"name": "Join Session",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"sessionId\": \"ABC123\",\n    \"username\": \"Jane Smith\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/sessions/join",
+					"host": ["{{baseUrl}}"],
+					"path": ["sessions", "join"]
+				},
+				"description": "Join an existing planning poker session"
+			}
+		},
+		{
+			"name": "Add Story",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"title\": \"User Authentication\",\n    \"description\": \"Implement login and registration functionality\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/sessions/{{sessionId}}/stories",
+					"host": ["{{baseUrl}}"],
+					"path": ["sessions", "{{sessionId}}", "stories"]
+				},
+				"description": "Add a new story to the session"
+			}
+		},
+		{
+			"name": "Start Voting",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/sessions/{{sessionId}}/stories/{{storyId}}/start",
+					"host": ["{{baseUrl}}"],
+					"path": ["sessions", "{{sessionId}}", "stories", "{{storyId}}", "start"]
+				},
+				"description": "Start voting for a specific story"
+			}
+		},
+		{
+			"name": "Submit Vote",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"vote\": \"8\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/sessions/{{sessionId}}/stories/{{storyId}}/vote/{{userId}}",
+					"host": ["{{baseUrl}}"],
+					"path": ["sessions", "{{sessionId}}", "stories", "{{storyId}}", "vote", "{{userId}}"]
+				},
+				"description": "Submit a vote for a story"
+			}
+		},
+		{
+			"name": "Reveal Votes",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/sessions/{{sessionId}}/reveal",
+					"host": ["{{baseUrl}}"],
+					"path": ["sessions", "{{sessionId}}", "reveal"]
+				},
+				"description": "Reveal all votes for the current story"
+			}
+		},
+		{
+			"name": "Finish Voting",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"finalEstimate\": \"8\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/sessions/{{sessionId}}/stories/{{storyId}}/finish",
+					"host": ["{{baseUrl}}"],
+					"path": ["sessions", "{{sessionId}}", "stories", "{{storyId}}", "finish"]
+				},
+				"description": "Finish voting and set final estimate for a story"
+			}
+		},
+		{
+			"name": "Next Story",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/sessions/{{sessionId}}/next",
+					"host": ["{{baseUrl}}"],
+					"path": ["sessions", "{{sessionId}}", "next"]
+				},
+				"description": "Move to the next story in the session"
+			}
+		},
+		{
+			"name": "Export Session Data",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/sessions/export/{{sessionId}}",
+					"host": ["{{baseUrl}}"],
+					"path": ["sessions", "export", "{{sessionId}}"]
+				},
+				"description": "Export session data as CSV"
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:3000",
+			"type": "string"
+		}
+	]
+}
