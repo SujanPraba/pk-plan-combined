@@ -121,7 +121,7 @@ const StoryDetail = ({ story, isHost, isRevealDisabled, hasVotesRevealed }: Stor
       {isHost && !hasVotesRevealed && (
         <Button
           onClick={handleReveal}
-          disabled={isRevealDisabled}
+          // disabled={isRevealDisabled}
           className="mt-2"
         >
           Reveal Votes

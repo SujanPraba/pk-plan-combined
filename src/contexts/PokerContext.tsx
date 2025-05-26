@@ -16,6 +16,7 @@ interface PokerContextType {
   revealVotes: () => void;
   finishVoting: (finalEstimate: string | number) => void;
   nextStory: () => void;
+  leaveSession: () => void;
   socket: Socket | null;
 }
 
@@ -83,8 +84,66 @@ export const PokerProvider = ({ children }: PokerProviderProps) => {
       reconnection: true,
     });
 
+    // Set up socket event listeners
+    const setupSocketListeners = (socket: Socket) => {
+      socket.on('session_created', (data: PokerSession) => {
+        console.log('Session created:', data);
+        const transformedSession = {
+          ...data,
+          id: data.sessionId,
+        };
+        setSession(transformedSession);
+        if (data.participants && data.participants.length > 0) {
+          const host = data.participants.find(p => p.isHost);
+          if (host) {
+            setCurrentUser(host);
+          }
+        }
+        setLoading(false);
+      });
+
+      socket.on('session_joined', (data: { session: PokerSession; user: User }) => {
+        console.log('Session joined:', data);
+        const transformedSession = {
+          ...data.session,
+          id: data.session.sessionId,
+        };
+        setSession(transformedSession);
+        setCurrentUser(data.user);
+        setLoading(false);
+      });
+
+      socket.on('session_updated', (data: PokerSession) => {
+        console.log('Session updated:', data);
+        const transformedSession = {
+          ...data,
+          id: data.sessionId,
+        };
+        setSession(transformedSession);
+      });
+
+      socket.on('session_left', () => {
+        console.log('Left session');
+        setSession(null);
+        setCurrentUser(null);
+        setLoading(false);
+      });
+
+      socket.on('error', (message: string) => {
+        console.error('Socket error:', message);
+        setError(message);
+        setLoading(false);
+      });
+    };
+
+    // Set up initial socket listeners
+    setupSocketListeners(socketInstance);
+
     socketInstance.on('connect', () => {
       console.log('Socket connected successfully');
+      // Re-setup listeners on reconnection
+      setupSocketListeners(socketInstance);
+      
       // Rejoin session room if we have an active session
       if (session) {
         socketInstance.emit('rejoin_session', {
@@ -103,62 +162,10 @@ export const PokerProvider = ({ children }: PokerProviderProps) => {
 
     return () => {
       console.log('Disconnecting socket...');
+      socketInstance.removeAllListeners();
       socketInstance.disconnect();
     };
-  }, []);
-
-  useEffect(() => {
-    if (!socket) return;
-
-    socket.on('session_created', (data: PokerSession) => {
-      console.log('Session created:', data);
-      const transformedSession = {
-        ...data,
-        id: data.sessionId,
-      };
-      setSession(transformedSession);
-      if (data.participants && data.participants.length > 0) {
-        const host = data.participants.find(p => p.isHost);
-        if (host) {
-          setCurrentUser(host);
-        }
-      }
-      setLoading(false);
-    });
-
-    socket.on('session_joined', (data: { session: PokerSession; user: User }) => {
-      console.log('Session joined:', data);
-      const transformedSession = {
-        ...data.session,
-        id: data.session.sessionId,
-      };
-      setSession(transformedSession);
-      setCurrentUser(data.user);
-      setLoading(false);
-    });
-
-    socket.on('session_updated', (data: PokerSession) => {
-      console.log('Session updated:', data);
-      const transformedSession = {
-        ...data,
-        id: data.sessionId,
-      };
-      setSession(transformedSession);
-    });
-
-    socket.on('error', (message: string) => {
-      console.error('Socket error:', message);
-      setError(message);
-      setLoading(false);
-    });
-
-    return () => {
-      socket.off('session_created');
-      socket.off('session_joined');
-      socket.off('session_updated');
-      socket.off('error');
-    };
-  }, [socket]);
+  }, [session?.sessionId, currentUser?.id]); // Add dependencies to re-establish connection when needed
 
   const createSession = (name: string, votingSystem: 'fibonacci' | 'tshirt', username: string) => {
     if (!socket) return;
@@ -216,6 +223,14 @@ export const PokerProvider = ({ children }: PokerProviderProps) => {
     socket.emit('next_story', { sessionId: session.id });
   };
 
+  const leaveSession = () => {
+    if (!socket || !session || !currentUser) return;
+    socket.emit('leave_session', {
+      sessionId: session.id,
+      userId: currentUser.id
+    });
+  };
+
   return (
     <PokerContext.Provider
       value={{
@@ -231,6 +246,7 @@ export const PokerProvider = ({ children }: PokerProviderProps) => {
         revealVotes,
         finishVoting,
         nextStory,
+        leaveSession,
         socket,
       }}
     >
