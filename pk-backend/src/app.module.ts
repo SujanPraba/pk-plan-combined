@@ -10,6 +10,10 @@ import { Story } from './session/entities/story.entity';
 import { User } from './session/entities/user.entity';
 import { SessionModule } from './session/session.module';
 import { SocketModule } from './socket/socket.module';
+import { RetroModule } from './retro/retro.module';
+import { RetroSession } from './retro/entities/retro-session.entity';
+import { RetroUser } from './retro/entities/retro-user.entity';
+import { RetroItem } from './retro/entities/retro-item.entity';
 
 @Module({
   imports: [
@@ -29,7 +33,7 @@ import { SocketModule } from './socket/socket.module';
           username: dbConfig.username,
           password: dbConfig.password,
           database: dbConfig.database,
-          entities: [Session, Story, User],
+          entities: [Session, Story, User, RetroSession, RetroUser, RetroItem],
           synchronize: dbConfig.synchronize,
           dropSchema: dbConfig.dropSchema,
           logging: dbConfig.logging,
@@ -40,6 +44,7 @@ import { SocketModule } from './socket/socket.module';
     SessionModule,
     SocketModule,
     JiraModule,
+    RetroModule,
   ],
 })
 export class AppModule {}

@@ -265,4 +265,25 @@ export class SessionService {
       },
     };
   }
+
+  async removeParticipant(sessionId: string, userId: string): Promise<SessionWithRelations | null> {
+    try {
+      // Delete the user from the database
+      await this.userRepository.delete({ id: userId, sessionId });
+
+      // Get the updated session
+      const session = await this.findBySessionId(sessionId);
+      
+      // If this was the last participant, delete the session
+      if (session && session.participants.length === 0) {
+        await this.sessionRepository.delete({ sessionId });
+        return null;
+      }
+
+      return session;
+    } catch (error) {
+      this.logger.error(`Error removing participant: ${error.message}`);
+      throw error;
+    }
+  }
 }

@@ -22,6 +22,10 @@ const story_entity_1 = require("./session/entities/story.entity");
 const user_entity_1 = require("./session/entities/user.entity");
 const session_module_1 = require("./session/session.module");
 const socket_module_1 = require("./socket/socket.module");
+const retro_module_1 = require("./retro/retro.module");
+const retro_session_entity_1 = require("./retro/entities/retro-session.entity");
+const retro_user_entity_1 = require("./retro/entities/retro-user.entity");
+const retro_item_entity_1 = require("./retro/entities/retro-item.entity");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -44,7 +48,7 @@ exports.AppModule = AppModule = __decorate([
                         username: dbConfig.username,
                         password: dbConfig.password,
                         database: dbConfig.database,
-                        entities: [session_entity_1.Session, story_entity_1.Story, user_entity_1.User],
+                        entities: [session_entity_1.Session, story_entity_1.Story, user_entity_1.User, retro_session_entity_1.RetroSession, retro_user_entity_1.RetroUser, retro_item_entity_1.RetroItem],
                         synchronize: dbConfig.synchronize,
                         dropSchema: dbConfig.dropSchema,
                         logging: dbConfig.logging,
@@ -55,6 +59,7 @@ exports.AppModule = AppModule = __decorate([
             session_module_1.SessionModule,
             socket_module_1.SocketModule,
             jira_module_1.JiraModule,
+            retro_module_1.RetroModule,
         ],
     })
 ], AppModule);

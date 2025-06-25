@@ -19,7 +19,7 @@ import { useNavigate } from 'react-router-dom';
 
 const Session = () => {
   const navigate = useNavigate();
-  const { session, currentUser, socket, addStory } = usePoker();
+  const { session, currentUser, socket, addStory, leaveSession } = usePoker();
   const [copied, setCopied] = useState(false);
   const [newStoryTitle, setNewStoryTitle] = useState('');
   const [newStoryDescription, setNewStoryDescription] = useState('');
@@ -98,10 +98,7 @@ const Session = () => {
   };
 
   const handleLeaveSession = () => {
-    // Clear session data from localStorage
-    localStorage.removeItem('pokerSession');
-    localStorage.removeItem('pokerUser');
-    navigate('/');
+    leaveSession();
   };
 
   if (!session || !currentUser) {
@@ -238,16 +235,26 @@ const Session = () => {
 
                       <Separator className="my-4" />
 
-                      <h3 className="font-medium mb-3">Your Vote</h3>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-6 gap-2">
-                        {votingValues.map((value) => (
-                          <VotingCard
-                            key={value}
-                            value={value}
-                            disabled={!!session.hasVotesRevealed || !!currentStory.finalEstimate}
-                            selected={currentStory.votes?.[currentUser.id] === value}
-                          />
-                        ))}
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h3 className="font-medium">Your Vote</h3>
+                          {session.participants.some(p => p.hasVoted) && (
+                            <div className="text-sm text-muted-foreground">
+                              {session.participants.filter(p => p.hasVoted).length} of {session.participants.length} voted 👀
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-7 gap-4 items-start">
+                          {votingValues.map((value) => (
+                            <VotingCard
+                              key={value}
+                              value={value}
+                              disabled={!!session.hasVotesRevealed || !!currentStory.finalEstimate}
+                              selected={currentStory.votes?.[currentUser.id] === value}
+                            />
+                          ))}
+                        </div>
                       </div>
                     </div>
                   ) : (

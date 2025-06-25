@@ -215,6 +215,21 @@ let SessionService = SessionService_1 = class SessionService {
             },
         };
     }
+    async removeParticipant(sessionId, userId) {
+        try {
+            await this.userRepository.delete({ id: userId, sessionId });
+            const session = await this.findBySessionId(sessionId);
+            if (session && session.participants.length === 0) {
+                await this.sessionRepository.delete({ sessionId });
+                return null;
+            }
+            return session;
+        }
+        catch (error) {
+            this.logger.error(`Error removing participant: ${error.message}`);
+            throw error;
+        }
+    }
 };
 exports.SessionService = SessionService;
 exports.SessionService = SessionService = SessionService_1 = __decorate([
