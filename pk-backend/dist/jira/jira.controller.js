@@ -19,66 +19,117 @@ let JiraController = class JiraController {
     constructor(jiraService) {
         this.jiraService = jiraService;
     }
-    async getProjects() {
-        return this.jiraService.getAllProjects();
+    getCredentialsFromHeaders(headers) {
+        const host = headers['jira-host'];
+        const username = headers['jira-username'];
+        const apiToken = headers['jira-api-token'];
+        if (!host || !username || !apiToken) {
+            throw new common_1.BadRequestException('Missing required Jira credentials in headers');
+        }
+        return { host, username, apiToken };
     }
-    async getUsers() {
-        return this.jiraService.getAllUsers();
+    async getProjects(headers) {
+        const credentials = this.getCredentialsFromHeaders(headers);
+        return this.jiraService.getAllProjects(credentials);
     }
-    async getStories(sprintId) {
-        return this.jiraService.getAllStoriesForSprint(sprintId);
+    async getUsers(headers) {
+        const credentials = this.getCredentialsFromHeaders(headers);
+        return this.jiraService.getAllUsers(credentials);
     }
-    async getEpicStories(epicKey) {
-        return this.jiraService.getStoriesForEpic(epicKey);
+    async getStories(headers, sprintId) {
+        const credentials = this.getCredentialsFromHeaders(headers);
+        return this.jiraService.getAllStoriesForSprint(credentials, sprintId);
     }
-    async getBoards(projectId) {
-        return this.jiraService.getBoardsForProject(projectId);
+    async getEpicStories(headers, epicKey) {
+        const credentials = this.getCredentialsFromHeaders(headers);
+        return this.jiraService.getStoriesForEpic(credentials, epicKey);
     }
-    async getSprints(boardId) {
-        return this.jiraService.getSprints(boardId);
+    async getBoards(headers, projectId) {
+        const credentials = this.getCredentialsFromHeaders(headers);
+        return this.jiraService.getBoardsForProject(credentials, projectId);
+    }
+    async getSprints(headers, boardId) {
+        const credentials = this.getCredentialsFromHeaders(headers);
+        return this.jiraService.getSprints(credentials, boardId);
+    }
+    async getBacklogIssues(headers, projectId, search, types, priorities, statuses, labels, assignee, orderBy, orderDirection) {
+        const credentials = this.getCredentialsFromHeaders(headers);
+        const filter = {
+            search: search?.trim(),
+            types: types?.trim() ? types.split(',').filter(Boolean) : undefined,
+            priorities: priorities?.trim() ? priorities.split(',').filter(Boolean) : undefined,
+            statuses: statuses?.trim() ? statuses.split(',').filter(Boolean) : undefined,
+            labels: labels?.trim() ? labels.split(',').filter(Boolean) : undefined,
+            assignee: assignee?.trim(),
+            orderBy: orderBy?.trim(),
+            orderDirection
+        };
+        return this.jiraService.getBacklogIssues(credentials, projectId, filter);
     }
 };
 exports.JiraController = JiraController;
 __decorate([
     (0, common_1.Get)('projects'),
+    __param(0, (0, common_1.Headers)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], JiraController.prototype, "getProjects", null);
 __decorate([
     (0, common_1.Get)('users'),
+    __param(0, (0, common_1.Headers)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], JiraController.prototype, "getUsers", null);
 __decorate([
     (0, common_1.Get)('stories'),
-    __param(0, (0, common_1.Query)('sprintId')),
+    __param(0, (0, common_1.Headers)()),
+    __param(1, (0, common_1.Query)('sprintId')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", Promise)
 ], JiraController.prototype, "getStories", null);
 __decorate([
     (0, common_1.Get)('epic-stories'),
-    __param(0, (0, common_1.Query)('epicKey')),
+    __param(0, (0, common_1.Headers)()),
+    __param(1, (0, common_1.Query)('epicKey')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", Promise)
 ], JiraController.prototype, "getEpicStories", null);
 __decorate([
     (0, common_1.Get)('boards'),
-    __param(0, (0, common_1.Query)('projectId')),
+    __param(0, (0, common_1.Headers)()),
+    __param(1, (0, common_1.Query)('projectId')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", Promise)
 ], JiraController.prototype, "getBoards", null);
 __decorate([
     (0, common_1.Get)('sprints'),
-    __param(0, (0, common_1.Query)('boardId')),
+    __param(0, (0, common_1.Headers)()),
+    __param(1, (0, common_1.Query)('boardId')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", Promise)
 ], JiraController.prototype, "getSprints", null);
+__decorate([
+    (0, common_1.Get)('backlog'),
+    __param(0, (0, common_1.Headers)()),
+    __param(1, (0, common_1.Query)('projectId')),
+    __param(2, (0, common_1.Query)('search')),
+    __param(3, (0, common_1.Query)('types')),
+    __param(4, (0, common_1.Query)('priorities')),
+    __param(5, (0, common_1.Query)('statuses')),
+    __param(6, (0, common_1.Query)('labels')),
+    __param(7, (0, common_1.Query)('assignee')),
+    __param(8, (0, common_1.Query)('orderBy')),
+    __param(9, (0, common_1.Query)('orderDirection')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, String, String, String, String, String, String, String, String]),
+    __metadata("design:returntype", Promise)
+], JiraController.prototype, "getBacklogIssues", null);
 exports.JiraController = JiraController = __decorate([
     (0, common_1.Controller)('jira'),
     __metadata("design:paramtypes", [jira_service_1.JiraService])
