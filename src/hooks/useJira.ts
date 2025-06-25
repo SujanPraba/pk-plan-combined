@@ -54,7 +54,7 @@ export function useJira() {
   });
 
   // Fetch projects
-  const fetchProjects = useCallback(async () => {
+  const fetchProjects = useCallback(async (email: string) => {
     setState(prev => ({
       ...prev,
       loading: { ...prev.loading, projects: true },
@@ -62,7 +62,7 @@ export function useJira() {
     }));
 
     try {
-      const projects = await jiraApi.getProjects();
+      const projects = await jiraApi.getProjects(email);
       setState(prev => ({
         ...prev,
         projects,

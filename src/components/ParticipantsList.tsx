@@ -14,6 +14,11 @@ const ParticipantsList = ({ participants, currentUserId }: ParticipantsListProps
     ? session.stories.find(story => story.id === session.currentStoryId)
     : null;
 
+  // Filter participants to only show those in the current session
+  const activeParticipants = participants.filter(participant =>
+    session && participant.sessionId === session.id
+  );
+
   const getInitials = (name: string) => {
     return name
       .split(' ')
@@ -27,7 +32,7 @@ const ParticipantsList = ({ participants, currentUserId }: ParticipantsListProps
 
   return (
     <div className="space-y-2 max-h-[300px] overflow-y-auto">
-      {participants.map((user) => (
+      {activeParticipants.map((user) => (
         <div
           key={user.id}
           className="flex items-center justify-between p-2 rounded-md border border-border"

@@ -23,7 +23,7 @@ export declare class RetroService {
     startVoting(sessionId: string): Promise<RetroSessionWithRelations>;
     revealVotes(sessionId: string): Promise<RetroSessionWithRelations>;
     finishRetro(sessionId: string): Promise<RetroSessionWithRelations>;
-    removeParticipant(sessionId: string, userId: string): Promise<RetroSessionWithRelations | null>;
+    removeParticipant(sessionId: string, userId: string): Promise<RetroSession | null>;
     addCategory(sessionId: string, categoryName: string): Promise<RetroSessionWithRelations>;
     removeCategory(sessionId: string, categoryName: string): Promise<RetroSessionWithRelations>;
     exportToCSV(sessionId: string): Promise<string>;

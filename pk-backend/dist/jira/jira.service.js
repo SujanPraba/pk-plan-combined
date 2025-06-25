@@ -15,142 +15,148 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.JiraService = void 0;
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
-const jira_client_1 = __importDefault(require("jira-client"));
-const node_fetch_1 = __importDefault(require("node-fetch"));
+const axios_1 = __importDefault(require("axios"));
+const crypto_1 = require("crypto");
 let JiraService = class JiraService {
     constructor(configService) {
         this.configService = configService;
-        const jiraConfig = this.configService.get('jira');
-        this.host = jiraConfig?.host || this.configService.get('JIRA_HOST');
-        this.username = jiraConfig?.username || this.configService.get('JIRA_USERNAME');
-        this.apiToken = jiraConfig?.apiToken || this.configService.get('JIRA_API_TOKEN');
-        this.jira = new jira_client_1.default({
-            protocol: 'https',
-            host: this.host,
-            username: this.username,
-            password: this.apiToken,
-            apiVersion: '3',
-            strictSSL: true
-        });
+        this.clientId = this.configService.get('JIRA_CLIENT_ID');
+        this.clientSecret = this.configService.get('JIRA_CLIENT_SECRET');
+        this.redirectUri = this.configService.get('JIRA_REDIRECT_URI');
     }
-    async getAllStoriesForSprint(sprintId) {
+    getAuthUrl() {
+        const state = (0, crypto_1.randomBytes)(16).toString('hex');
+        const scopes = [
+            'read:jira-work',
+            'manage:jira-project',
+            'manage:jira-configuration',
+            'read:jira-user',
+            'write:jira-work',
+            'manage:jira-webhook',
+            'manage:jira-data-provider'
+        ];
+        const authUrl = new URL('https://auth.atlassian.com/authorize');
+        authUrl.searchParams.append('audience', 'api.atlassian.com');
+        authUrl.searchParams.append('client_id', this.clientId);
+        authUrl.searchParams.append('scope', scopes.join(' '));
+        authUrl.searchParams.append('redirect_uri', this.redirectUri);
+        authUrl.searchParams.append('state', state);
+        authUrl.searchParams.append('response_type', 'code');
+        authUrl.searchParams.append('prompt', 'consent');
+        return { url: authUrl.toString(), state };
+    }
+    async exchangeCodeForToken(code) {
         try {
-            const jql = `Sprint = ${sprintId} AND issuetype = Story`;
-            const result = await this.jira.searchJira(jql, {
-                maxResults: 1000,
-                fields: ['summary', 'description', 'status', 'customfield_10004']
+            const response = await axios_1.default.post('https://auth.atlassian.com/oauth/token', {
+                grant_type: 'authorization_code',
+                client_id: this.clientId,
+                client_secret: this.clientSecret,
+                code,
+                redirect_uri: this.redirectUri,
             });
-            return result.issues;
+            return {
+                access_token: response.data.access_token,
+                refresh_token: response.data.refresh_token,
+                expires_in: response.data.expires_in,
+            };
         }
         catch (error) {
-            this.handleJiraError(error);
-            throw new common_1.BadRequestException('Failed to fetch stories from Jira');
+            throw new common_1.UnauthorizedException('Failed to exchange code for token');
         }
     }
-    async getStoriesForEpic(epicKey) {
+    async getAccessibleResources(accessToken) {
         try {
-            const jql = `"Epic Link" = "${epicKey}"`;
-            const result = await this.jira.searchJira(jql);
-            return result.issues;
-        }
-        catch (error) {
-            this.handleJiraError(error);
-            throw new common_1.BadRequestException('Failed to fetch epic stories');
-        }
-    }
-    async getAllUsers() {
-        try {
-            const users = await this.jira.searchUsers({
-                query: '+',
-                maxResults: 1000
-            });
-            return users.map(user => ({
-                id: user.accountId,
-                name: user.displayName,
-                email: user.emailAddress,
-                avatarUrl: user.avatarUrls['48x48']
-            }));
-        }
-        catch (error) {
-            this.handleJiraError(error);
-            throw new common_1.BadRequestException('Failed to fetch Jira users');
-        }
-    }
-    async getAllProjects() {
-        try {
-            const auth = Buffer.from(`${this.username}:${this.apiToken}`).toString('base64');
-            const response = await (0, node_fetch_1.default)(`https://${this.host}/rest/api/3/project/search?maxResults=200`, {
-                method: 'GET',
+            const response = await axios_1.default.get('https://api.atlassian.com/oauth/token/accessible-resources', {
                 headers: {
-                    'Authorization': `Basic ${auth}`,
-                    'Accept': 'application/json'
-                }
+                    Authorization: `Bearer ${accessToken}`,
+                },
             });
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            const data = await response.json();
-            return data.values.map(project => ({
+            return response.data;
+        }
+        catch (error) {
+            throw new common_1.UnauthorizedException('Failed to get Jira instances');
+        }
+    }
+    async getProjects(cloudId, accessToken) {
+        try {
+            const response = await axios_1.default.get(`https://api.atlassian.com/ex/jira/${cloudId}/rest/api/3/project`, {
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                },
+            });
+            return response.data.map(project => ({
                 id: project.id,
                 key: project.key,
                 name: project.name,
-                lead: project.lead ? project.lead.displayName : null,
-                avatarUrl: project.avatarUrls ? project.avatarUrls['48x48'] : null
+                projectTypeKey: project.projectTypeKey,
             }));
         }
         catch (error) {
-            this.handleJiraError(error);
-            throw new common_1.BadRequestException('Failed to fetch Jira projects');
+            throw new common_1.UnauthorizedException('Failed to get projects');
         }
     }
-    async getSprints(boardId) {
+    async getSprints(projectId, cloudId, accessToken) {
         try {
-            const auth = Buffer.from(`${this.username}:${this.apiToken}`).toString('base64');
-            const response = await (0, node_fetch_1.default)(`https://${this.host}/rest/agile/1.0/board/${boardId}/sprint`, {
-                method: 'GET',
+            const boardsResponse = await axios_1.default.get(`https://api.atlassian.com/ex/jira/${cloudId}/rest/agile/1.0/board`, {
+                params: { projectKeyOrId: projectId },
                 headers: {
-                    'Authorization': `Basic ${auth}`,
-                    'Accept': 'application/json'
-                }
+                    Authorization: `Bearer ${accessToken}`,
+                },
             });
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+            const sprints = [];
+            for (const board of boardsResponse.data.values) {
+                const sprintsResponse = await axios_1.default.get(`https://api.atlassian.com/ex/jira/${cloudId}/rest/agile/1.0/board/${board.id}/sprint`, {
+                    headers: {
+                        Authorization: `Bearer ${accessToken}`,
+                    },
+                });
+                sprints.push(...sprintsResponse.data.values);
             }
-            const data = await response.json();
-            return data.values;
+            return sprints.map(sprint => ({
+                id: sprint.id,
+                name: sprint.name,
+                state: sprint.state,
+                startDate: sprint.startDate,
+                endDate: sprint.endDate,
+                boardId: sprint.originBoardId,
+            }));
         }
         catch (error) {
-            this.handleJiraError(error);
-            throw new common_1.BadRequestException('Failed to fetch sprints');
+            throw new common_1.UnauthorizedException('Failed to get sprints');
         }
     }
-    async getBoardsForProject(projectKeyOrId) {
+    async getStoriesFromSprint(sprintId, cloudId, accessToken) {
         try {
-            const auth = Buffer.from(`${this.username}:${this.apiToken}`).toString('base64');
-            const response = await (0, node_fetch_1.default)(`https://${this.host}/rest/agile/1.0/board?projectKeyOrId=${projectKeyOrId}`, {
-                method: 'GET',
+            const response = await axios_1.default.get(`https://api.atlassian.com/ex/jira/${cloudId}/rest/agile/1.0/sprint/${sprintId}/issue`, {
                 headers: {
-                    'Authorization': `Basic ${auth}`,
-                    'Accept': 'application/json'
-                }
+                    Authorization: `Bearer ${accessToken}`,
+                },
+                params: {
+                    fields: [
+                        'summary',
+                        'description',
+                        'priority',
+                        'status',
+                        'assignee',
+                        'customfield_10026',
+                        'labels',
+                    ].join(','),
+                },
             });
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            const data = await response.json();
-            return data.values;
+            return response.data.issues.map(issue => ({
+                id: issue.key,
+                summary: issue.fields.summary,
+                description: issue.fields.description,
+                storyPoints: issue.fields.customfield_10026,
+                priority: issue.fields.priority?.name,
+                assignee: issue.fields.assignee?.emailAddress,
+                status: issue.fields.status.name,
+                labels: issue.fields.labels,
+            }));
         }
         catch (error) {
-            this.handleJiraError(error);
-            throw new common_1.BadRequestException('Failed to fetch boards');
+            throw new common_1.UnauthorizedException('Failed to get stories');
         }
-    }
-    handleJiraError(error) {
-        if (error.statusCode === 429) {
-            const retryAfter = error.headers ? error.headers['retry-after'] || 60 : 60;
-            console.log(`Rate limited. Retry after ${retryAfter} seconds`);
-        }
-        console.error('Jira API error:', error.message);
     }
 };
 exports.JiraService = JiraService;

@@ -8,6 +8,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.JiraModule = void 0;
 const common_1 = require("@nestjs/common");
+const config_1 = require("@nestjs/config");
 const jira_controller_1 = require("./jira.controller");
 const jira_service_1 = require("./jira.service");
 let JiraModule = class JiraModule {
@@ -15,9 +16,10 @@ let JiraModule = class JiraModule {
 exports.JiraModule = JiraModule;
 exports.JiraModule = JiraModule = __decorate([
     (0, common_1.Module)({
+        imports: [config_1.ConfigModule],
         controllers: [jira_controller_1.JiraController],
         providers: [jira_service_1.JiraService],
-        exports: [jira_service_1.JiraService]
+        exports: [jira_service_1.JiraService],
     })
 ], JiraModule);
 //# sourceMappingURL=jira.module.js.map

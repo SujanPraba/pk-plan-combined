@@ -110,59 +110,49 @@ export const RetroProvider = ({ children }: RetroProviderProps) => {
       reconnection: true,
     });
 
-    const setupSocketListeners = (socket: Socket) => {
-      socket.on('retro_session_created', (data: RetroSession) => {
-        console.log('Retro session created:', data);
-        setSession(data);
-        if (data.participants && data.participants.length > 0) {
-          const host = data.participants.find(p => p.isHost);
-          if (host) {
-            setCurrentUser(host);
-          }
-        }
+    const setupSocketListeners = (socketInstance: Socket) => {
+      socketInstance.on('retro_session_created', (newSession: RetroSession) => {
+        setSession(newSession);
+        setCurrentUser(newSession.participants.find(p => p.isHost));
         setLoading(false);
-        setError(null);
       });
 
-      socket.on('retro_session_joined', (data: { session: RetroSession; user: RetroUser }) => {
-        console.log('Retro session joined:', data);
+      socketInstance.on('retro_session_joined', (data: { session: RetroSession; user: RetroUser }) => {
         setSession(data.session);
         setCurrentUser(data.user);
         setLoading(false);
-        setError(null);
       });
 
-      socket.on('retro_session_updated', (data: RetroSession) => {
-        console.log('Retro session updated with new data:', data);
-        setSession(data);
-        
-        // Check if current user is still in the session
-        if (currentUser && !data.participants.find(p => p.id === currentUser.id)) {
-          console.log('Current user was removed from session');
-          setCurrentUser(null);
-          navigate('/');
+      socketInstance.on('retro_session_updated', (updatedSession: RetroSession) => {
+        setSession(updatedSession);
+        // Update current user's data from the updated session
+        if (currentUser) {
+          const updatedUser = updatedSession.participants.find(p => p.id === currentUser.id);
+          if (updatedUser) {
+            setCurrentUser(updatedUser);
+          }
         }
       });
 
-      socket.on('session_left', () => {
-        console.log('Left session');
+      socketInstance.on('session_left', () => {
+        // Clear all session data
         setSession(null);
         setCurrentUser(null);
-        setError(null);
+        localStorage.removeItem('retroSession');
+        localStorage.removeItem('retroUser');
         navigate('/');
       });
 
-      socket.on('error', (message: string) => {
-        console.error('Socket error:', message);
-        setError(message);
+      socketInstance.on('error', (error: string) => {
+        setError(error);
         setLoading(false);
       });
 
-      socket.on('connect', () => {
-        console.log('Socket connected with ID:', socket.id);
+      socketInstance.on('connect', () => {
+        console.log('Socket connected with ID:', socketInstance.id);
       });
 
-      socket.on('disconnect', () => {
+      socketInstance.on('disconnect', () => {
         console.log('Socket disconnected');
       });
     };

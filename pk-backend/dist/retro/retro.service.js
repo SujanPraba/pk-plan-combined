@@ -152,26 +152,31 @@ let RetroService = RetroService_1 = class RetroService {
         return this.findBySessionId(sessionId);
     }
     async removeParticipant(sessionId, userId) {
-        const user = await this.retroUserRepository.findOne({
-            where: { id: userId, sessionId }
-        });
-        if (!user) {
-            this.logger.warn(`User ${userId} not found in session ${sessionId}`);
+        try {
+            const user = await this.retroUserRepository.findOne({
+                where: { id: userId, sessionId }
+            });
+            if (!user) {
+                this.logger.warn(`User ${userId} not found in session ${sessionId}`);
+                return this.findBySessionId(sessionId);
+            }
+            await this.retroUserRepository.delete({ id: userId, sessionId });
+            const remainingParticipants = await this.retroUserRepository.find({ where: { sessionId } });
+            if (remainingParticipants.length === 0) {
+                await this.retroItemRepository.delete({ sessionId });
+                await this.retroSessionRepository.delete({ sessionId });
+                return null;
+            }
+            if (user.isHost && remainingParticipants.length > 0) {
+                const newHost = remainingParticipants[0];
+                await this.retroUserRepository.update({ id: newHost.id }, { isHost: true });
+            }
             return this.findBySessionId(sessionId);
         }
-        await this.retroUserRepository.delete({ id: userId, sessionId });
-        const session = await this.findBySessionId(sessionId);
-        if (session.participants.length === 0) {
-            await this.retroSessionRepository.delete({ sessionId });
-            await this.retroItemRepository.delete({ sessionId });
-            return null;
+        catch (error) {
+            this.logger.error(`Error removing participant: ${error.message}`);
+            throw error;
         }
-        if (user.isHost && session.participants.length > 0) {
-            const newHost = session.participants[0];
-            await this.retroUserRepository.update({ id: newHost.id }, { isHost: true });
-            return this.findBySessionId(sessionId);
-        }
-        return session;
     }
     async addCategory(sessionId, categoryName) {
         const session = await this.findBySessionId(sessionId);

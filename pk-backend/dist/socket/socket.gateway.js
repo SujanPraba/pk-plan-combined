@@ -36,7 +36,7 @@ let SocketGateway = class SocketGateway {
                 votingSystem: payload.votingSystem,
                 username: payload.username,
             });
-            client.join(session.sessionId);
+            client.join(session.id);
             client.emit('session_created', session);
         }
         catch (error) {
@@ -50,8 +50,8 @@ let SocketGateway = class SocketGateway {
                 sessionId: payload.sessionId,
                 username: payload.username,
             });
-            client.join(session.sessionId);
-            this.server.to(session.sessionId).emit('session_updated', session);
+            client.join(session.id);
+            this.server.to(session.id).emit('session_updated', session);
             client.emit('session_joined', { session, user });
         }
         catch (error) {
@@ -160,12 +160,12 @@ let SocketGateway = class SocketGateway {
             if (!session) {
                 throw new Error(`Session with ID ${payload.sessionId} not found`);
             }
-            client.join(session.sessionId);
+            client.join(session.id);
             const user = session.participants.find(p => p.id === payload.userId);
             if (!user) {
                 throw new Error(`User not found in session`);
             }
-            this.server.to(session.sessionId).emit('session_updated', session);
+            this.server.to(session.id).emit('session_updated', session);
             client.emit('session_joined', { session, user });
         }
         catch (error) {

@@ -45,7 +45,7 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
       });
 
       // Join the socket to a room with the session ID
-      client.join(session.sessionId);
+      client.join(session.id);
 
       // Send the created session back to the client
       client.emit('session_created', session);
@@ -64,10 +64,10 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
       });
 
       // Join the socket to a room with the session ID
-      client.join(session.sessionId);
+      client.join(session.id);
 
       // Notify all clients in the room about the updated session
-      this.server.to(session.sessionId).emit('session_updated', session);
+      this.server.to(session.id).emit('session_updated', session);
 
       // Send the joined session back to the client
       client.emit('session_joined', { session, user });
@@ -122,7 +122,7 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
 
       // Check if all participants have voted
       const allVoted = updatedSession.participants.every(p => p.hasVoted);
-      
+
       // If everyone has voted, automatically reveal votes
       if (allVoted) {
         const sessionWithRevealedVotes = await this.sessionService.revealVotes(payload.sessionId);
@@ -204,7 +204,7 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
         if (timeLeft <= 0) {
           clearInterval(this.timers[payload.sessionId]);
           delete this.timers[payload.sessionId];
-          
+
           // Automatically reveal votes when timer ends
           try {
             const sessionWithRevealedVotes = await this.sessionService.revealVotes(payload.sessionId);
@@ -229,7 +229,7 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
       }
 
       // Join the socket to the session room
-      client.join(session.sessionId);
+      client.join(session.id);
 
       // Find the user in the session
       const user = session.participants.find(p => p.id === payload.userId);
@@ -238,7 +238,7 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
       }
 
       // Notify all clients in the room about the updated session
-      this.server.to(session.sessionId).emit('session_updated', session);
+      this.server.to(session.id).emit('session_updated', session);
 
       // Send the session data back to the client
       client.emit('session_joined', { session, user });
@@ -253,7 +253,7 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
     try {
       // Remove user from the session
       const updatedSession = await this.sessionService.removeParticipant(payload.sessionId, payload.userId);
-      
+
       // Leave the socket room
       client.leave(payload.sessionId);
 
