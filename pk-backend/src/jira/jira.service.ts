@@ -1,24 +1,7 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
-import JiraApi from 'jira-client';
-import fetch from 'node-fetch';
-
-interface JiraCredentials {
-  host: string;
-  username: string;
-  apiToken: string;
-}
-
-interface JiraProject {
-  id: string;
-  key: string;
-  name: string;
-  lead?: { displayName: string };
-  avatarUrls?: { [key: string]: string };
-}
-
-interface JiraResponse<T> {
-  values: T[];
-}
+import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import axios from 'axios';
+import { randomBytes } from 'crypto';
 
 interface BacklogFilter {
   search?: string;        // Search in summary and description
@@ -33,270 +16,173 @@ interface BacklogFilter {
 
 @Injectable()
 export class JiraService {
-  private getJiraClient(credentials: JiraCredentials): JiraApi {
-    return new JiraApi({
-      protocol: 'https',
-      host: credentials.host,
-      username: credentials.username,
-      password: credentials.apiToken,
-      apiVersion: '3',
-      strictSSL: true
-    });
+  private readonly clientId: string;
+  private readonly clientSecret: string;
+  private readonly redirectUri: string;
+
+  constructor(private readonly configService: ConfigService) {
+    this.clientId = this.configService.get<string>('JIRA_CLIENT_ID');
+    this.clientSecret = this.configService.get<string>('JIRA_CLIENT_SECRET');
+    this.redirectUri = this.configService.get<string>('JIRA_REDIRECT_URI');
   }
 
-  private getAuthHeaders(credentials: JiraCredentials) {
-    const auth = Buffer.from(`${credentials.username}:${credentials.apiToken}`).toString('base64');
-    return {
-      'Authorization': `Basic ${auth}`,
-      'Accept': 'application/json'
-    };
+  getAuthUrl() {
+    const state = randomBytes(16).toString('hex');
+    const scopes = [
+      'read:jira-work',
+      'manage:jira-project',
+      'manage:jira-configuration',
+      'read:jira-user',
+      'write:jira-work',
+      'manage:jira-webhook',
+      'manage:jira-data-provider'
+    ];
+
+    const authUrl = new URL('https://auth.atlassian.com/authorize');
+    authUrl.searchParams.append('audience', 'api.atlassian.com');
+    authUrl.searchParams.append('client_id', this.clientId);
+    authUrl.searchParams.append('scope', scopes.join(' '));
+    authUrl.searchParams.append('redirect_uri', this.redirectUri);
+    authUrl.searchParams.append('state', state);
+    authUrl.searchParams.append('response_type', 'code');
+    authUrl.searchParams.append('prompt', 'consent');
+
+    return { url: authUrl.toString(), state };
   }
 
-  async getAllProjects(credentials: JiraCredentials): Promise<any[]> {
+  async exchangeCodeForToken(code: string) {
     try {
-      const response = await fetch(`https://${credentials.host}/rest/api/3/project/search?maxResults=200`, {
-        method: 'GET',
-        headers: this.getAuthHeaders(credentials)
+      const response = await axios.post('https://auth.atlassian.com/oauth/token', {
+        grant_type: 'authorization_code',
+        client_id: this.clientId,
+        client_secret: this.clientSecret,
+        code,
+        redirect_uri: this.redirectUri,
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+      return {
+        access_token: response.data.access_token,
+        refresh_token: response.data.refresh_token,
+        expires_in: response.data.expires_in,
+      };
+    } catch (error) {
+      throw new UnauthorizedException('Failed to exchange code for token');
+    }
+  }
 
-      const data = await response.json() as JiraResponse<JiraProject>;
-      return data.values.map(project => ({
+  async getAccessibleResources(accessToken: string) {
+    try {
+      const response = await axios.get(
+        'https://api.atlassian.com/oauth/token/accessible-resources',
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        },
+      );
+
+      return response.data;
+    } catch (error) {
+      throw new UnauthorizedException('Failed to get Jira instances');
+    }
+  }
+
+  async getProjects(cloudId: string, accessToken: string) {
+    try {
+      const response = await axios.get(
+        `https://api.atlassian.com/ex/jira/${cloudId}/rest/api/3/project`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        },
+      );
+
+      return response.data.map(project => ({
         id: project.id,
         key: project.key,
         name: project.name,
-        lead: project.lead ? project.lead.displayName : null,
-        avatarUrl: project.avatarUrls ? project.avatarUrls['48x48'] : null
+        projectTypeKey: project.projectTypeKey,
       }));
     } catch (error) {
-      this.handleJiraError(error);
-      throw new BadRequestException('Failed to fetch Jira projects');
+      throw new UnauthorizedException('Failed to get projects');
     }
   }
 
-  async getAllUsers(credentials: JiraCredentials): Promise<any[]> {
+  async getSprints(projectId: string, cloudId: string, accessToken: string) {
     try {
-      const jira = this.getJiraClient(credentials);
-      const users = await jira.searchUsers({
-        query: '+',
-        maxResults: 1000
-      });
+      // First get all boards for the project
+      const boardsResponse = await axios.get(
+        `https://api.atlassian.com/ex/jira/${cloudId}/rest/agile/1.0/board`,
+        {
+          params: { projectKeyOrId: projectId },
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        },
+      );
 
-      return users.map(user => ({
-        id: user.accountId,
-        name: user.displayName,
-        email: user.emailAddress,
-        avatarUrl: user.avatarUrls['48x48']
+      // Then get sprints for each board
+      const sprints = [];
+      for (const board of boardsResponse.data.values) {
+        const sprintsResponse = await axios.get(
+          `https://api.atlassian.com/ex/jira/${cloudId}/rest/agile/1.0/board/${board.id}/sprint`,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+            },
+          },
+        );
+        sprints.push(...sprintsResponse.data.values);
+      }
+
+      return sprints.map(sprint => ({
+        id: sprint.id,
+        name: sprint.name,
+        state: sprint.state,
+        startDate: sprint.startDate,
+        endDate: sprint.endDate,
+        boardId: sprint.originBoardId,
       }));
     } catch (error) {
-      this.handleJiraError(error);
-      throw new BadRequestException('Failed to fetch Jira users');
+      throw new UnauthorizedException('Failed to get sprints');
     }
   }
 
-  async getAllStoriesForSprint(credentials: JiraCredentials, sprintId: string): Promise<any[]> {
+  async getStoriesFromSprint(sprintId: string, cloudId: string, accessToken: string) {
     try {
-      const jira = this.getJiraClient(credentials);
-      const jql = `Sprint = ${sprintId} AND issuetype = Story`;
-      const result = await jira.searchJira(jql, {
-        maxResults: 1000,
-        fields: ['summary', 'description', 'status', 'customfield_10004']
-      });
-      return result.issues;
-    } catch (error) {
-      this.handleJiraError(error);
-      throw new BadRequestException('Failed to fetch stories from Jira');
-    }
-  }
-
-  async getStoriesForEpic(credentials: JiraCredentials, epicKey: string): Promise<any[]> {
-    try {
-      const jira = this.getJiraClient(credentials);
-      const jql = `"Epic Link" = "${epicKey}"`;
-      const result = await jira.searchJira(jql);
-      return result.issues;
-    } catch (error) {
-      this.handleJiraError(error);
-      throw new BadRequestException('Failed to fetch epic stories');
-    }
-  }
-
-  async getBoardsForProject(credentials: JiraCredentials, projectKeyOrId: string): Promise<any[]> {
-    try {
-      const response = await fetch(
-        `https://${credentials.host}/rest/agile/1.0/board?projectKeyOrId=${projectKeyOrId}`,
+      const response = await axios.get(
+        `https://api.atlassian.com/ex/jira/${cloudId}/rest/agile/1.0/sprint/${sprintId}/issue`,
         {
-          method: 'GET',
-          headers: this.getAuthHeaders(credentials)
-        }
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+          params: {
+            fields: [
+              'summary',
+              'description',
+              'priority',
+              'status',
+              'assignee',
+              'customfield_10026', // Story points (may need to adjust field ID)
+              'labels',
+            ].join(','),
+          },
+        },
       );
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json() as JiraResponse<any>;
-      return data.values;
-    } catch (error) {
-      this.handleJiraError(error);
-      throw new BadRequestException('Failed to fetch boards');
-    }
-  }
-
-  async getSprints(credentials: JiraCredentials, boardId: string): Promise<any[]> {
-    try {
-      const response = await fetch(
-        `https://${credentials.host}/rest/agile/1.0/board/${boardId}/sprint`,
-        {
-          method: 'GET',
-          headers: this.getAuthHeaders(credentials)
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json() as JiraResponse<any>;
-      return data.values;
-    } catch (error) {
-      this.handleJiraError(error);
-      throw new BadRequestException('Failed to fetch sprints');
-    }
-  }
-
-  async getBacklogIssues(
-    credentials: JiraCredentials, 
-    projectKeyOrId: string,
-    filter?: BacklogFilter
-  ): Promise<any[]> {
-    try {
-      const jira = this.getJiraClient(credentials);
-      
-      // Build JQL query based on filters
-      let jql = `project = "${projectKeyOrId}" AND sprint is EMPTY`;
-
-      // Add type filter only if types array has values
-      if (filter?.types?.length) {
-        const quotedTypes = filter.types
-          .map(type => type.trim())
-          .filter(Boolean)
-          .map(type => `"${type}"`);
-        if (quotedTypes.length) {
-          jql += ` AND issuetype in (${quotedTypes.join(',')})`;
-        }
-      }
-
-      // Add priority filter only if priorities array has values
-      if (filter?.priorities?.length) {
-        const quotedPriorities = filter.priorities
-          .map(priority => priority.trim())
-          .filter(Boolean)
-          .map(priority => `"${priority}"`);
-        if (quotedPriorities.length) {
-          jql += ` AND priority in (${quotedPriorities.join(',')})`;
-        }
-      }
-
-      // Add status filter only if statuses array has values
-      if (filter?.statuses?.length) {
-        const quotedStatuses = filter.statuses
-          .map(status => status.trim())
-          .filter(Boolean)
-          .map(status => `"${status}"`);
-        if (quotedStatuses.length) {
-          jql += ` AND status in (${quotedStatuses.join(',')})`;
-        }
-      }
-
-      // Add label filter only if labels array has values
-      if (filter?.labels?.length) {
-        const quotedLabels = filter.labels
-          .map(label => label.trim())
-          .filter(Boolean)
-          .map(label => `"${label}"`);
-        if (quotedLabels.length) {
-          jql += ` AND labels in (${quotedLabels.join(',')})`;
-        }
-      }
-
-      // Add assignee filter only if assignee has a value
-      if (filter?.assignee?.trim()) {
-        jql += ` AND assignee = "${filter.assignee.trim()}"`;
-      }
-
-      // Add search term only if search has a value
-      if (filter?.search?.trim()) {
-        jql += ` AND (summary ~ "${filter.search.trim()}" OR description ~ "${filter.search.trim()}")`;
-      }
-
-      // Add ordering
-      if (filter?.orderBy?.trim()) {
-        jql += ` ORDER BY ${filter.orderBy.trim()} ${filter.orderDirection || 'ASC'}`;
-      } else {
-        jql += ' ORDER BY Rank ASC';
-      }
-
-      console.log('JQL Query:', jql); // For debugging
-
-      const result = await jira.searchJira(jql, {
-        maxResults: 1000,
-        fields: [
-          'summary',
-          'description',
-          'issuetype',
-          'priority',
-          'status',
-          'assignee',
-          'reporter',
-          'created',
-          'updated',
-          'customfield_10004', // Story points
-          'labels',
-          'rank'
-        ]
-      });
-
-      return result.issues.map(issue => ({
-        id: issue.id,
-        key: issue.key,
+      return response.data.issues.map(issue => ({
+        id: issue.key,
         summary: issue.fields.summary,
         description: issue.fields.description,
-        type: issue.fields.issuetype.name,
+        storyPoints: issue.fields.customfield_10026,
         priority: issue.fields.priority?.name,
+        assignee: issue.fields.assignee?.emailAddress,
         status: issue.fields.status.name,
-        assignee: issue.fields.assignee ? {
-          id: issue.fields.assignee.accountId,
-          name: issue.fields.assignee.displayName,
-          email: issue.fields.assignee.emailAddress,
-          avatarUrl: issue.fields.assignee.avatarUrls['48x48']
-        } : null,
-        reporter: issue.fields.reporter ? {
-          id: issue.fields.reporter.accountId,
-          name: issue.fields.reporter.displayName,
-          email: issue.fields.reporter.emailAddress,
-          avatarUrl: issue.fields.reporter.avatarUrls['48x48']
-        } : null,
-        storyPoints: issue.fields.customfield_10004,
         labels: issue.fields.labels,
-        created: issue.fields.created,
-        updated: issue.fields.updated,
-        rank: issue.fields.rank
       }));
     } catch (error) {
-      this.handleJiraError(error);
-      throw new BadRequestException('Failed to fetch backlog issues');
+      throw new UnauthorizedException('Failed to get stories');
     }
   }
-
-  private handleJiraError(error) {
-    if (error.statusCode === 429) {
-      const retryAfter = error.headers ? error.headers['retry-after'] || 60 : 60;
-      console.log(`Rate limited. Retry after ${retryAfter} seconds`);
-    }
-    console.error('Jira API error:', error.message);
-  }
-}
+} 

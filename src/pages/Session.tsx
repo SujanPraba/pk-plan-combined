@@ -1,3 +1,4 @@
+import { JiraImportModal } from '@/components/JiraImportModal';
 import ParticipantsList from '@/components/ParticipantsList';
 import StoryDetail from '@/components/StoryDetail';
 import StoryList from '@/components/StoryList';
@@ -17,6 +18,17 @@ import { Check, Clock, Copy, Download } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+export interface JiraStory {
+  id: string;
+  key: string;
+  title: string;
+  description: string;
+  fields: {
+    summary: string;
+    description?: string;
+  };
+}
+
 const Session = () => {
   const navigate = useNavigate();
   const { session, currentUser, socket, addStory, leaveSession } = usePoker();
@@ -27,6 +39,7 @@ const Session = () => {
   const [timeLeft, setTimeLeft] = useState(0);
   const [timerActive, setTimerActive] = useState(false);
   const [isAddStoryDialogOpen, setIsAddStoryDialogOpen] = useState(false);
+  const [isJiraImportModalOpen, setIsJiraImportModalOpen] = useState(false);
 
   useEffect(() => {
     if (!session || !currentUser) {
@@ -49,7 +62,7 @@ const Session = () => {
 
   const handleCopySessionId = () => {
     if (!session) return;
-    navigator.clipboard.writeText(session.sessionId);
+    navigator.clipboard.writeText(session.id);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -57,7 +70,7 @@ const Session = () => {
   const handleAddStory = () => {
     if (!newStoryTitle || !session) return;
 
-    addStory(newStoryTitle, newStoryDescription ,setIsAddStoryDialogOpen);
+    addStory(newStoryTitle, newStoryDescription, setIsAddStoryDialogOpen);
     setNewStoryTitle('');
     setNewStoryDescription('');
   };
@@ -106,199 +119,120 @@ const Session = () => {
   }
 
   return (
-    <div className="min-h-screen bg-muted p-4">
-      <div className="max-w-7xl mx-auto">
-        <header className="bg-card rounded-lg p-4 shadow mb-6">
-          <div className="flex flex-col md:flex-row items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-primary">{session.name}</h1>
-              <div className="flex items-center mt-1 text-sm text-muted-foreground">
-                <span>Session ID: {session.id}</span>
-                <button
+    <div className="container mx-auto px-4 py-8">
+      <div className="flex flex-col gap-8">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">{session.name}</h1>
+            <div className="mt-2 flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-500">Session ID:</span>
+                <code className="rounded bg-gray-100 px-2 py-1 text-sm">{session.id}</code>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6"
                   onClick={handleCopySessionId}
-                  className="ml-2 text-primary hover:text-primary/80 focus:outline-none"
                 >
-                  {copied ? <Check size={16} /> : <Copy size={16} />}
-                </button>
+                  {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                </Button>
               </div>
-            </div>
-            <div className="flex items-center space-x-4 mt-4 md:mt-0">
-              {timerActive && currentStory && !currentStory.finalEstimate && (
-                <div className="flex items-center">
-                  <Clock className="mr-1" size={18} />
-                  <span>{timeLeft}s</span>
-                </div>
-              )}
-
-              {isCurrentUserHost && currentStory && !currentStory.finalEstimate && (
-                <div className="flex space-x-2">
-                  <Button variant="outline" size="sm" onClick={() => startTimer(30)}>30s</Button>
-                  <Button variant="outline" size="sm" onClick={() => startTimer(60)}>1m</Button>
-                  <Button variant="outline" size="sm" onClick={() => startTimer(120)}>2m</Button>
-
-                </div>
-              )}
-               {isCurrentUserHost && (
-                 <div className="flex space-x-2">
-                    <Button
-                      variant="outline"
-                      onClick={handleExportSession}
-                      className="flex items-center gap-2"
-                    >
-                      <Download size={16} />
-                      Export
-                    </Button>
-                  </div>
-                  )}
-
-              <Button variant="secondary" onClick={handleLeaveSession}>Leave Session</Button>
+              <Button variant="outline" size="sm" onClick={handleExportSession}>
+                <Download className="mr-2 h-4 w-4" />
+                Export
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleLeaveSession}>
+                Leave Session
+              </Button>
+              <Button onClick={() => setIsJiraImportModalOpen(true)}>
+                Import from Jira
+              </Button>
             </div>
           </div>
-        </header>
+        </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Left sidebar */}
-          <div className="lg:col-span-1">
-            <Card className="mb-6">
-              <div className="p-4">
-                <h2 className="font-semibold mb-2">Participants</h2>
-                <ParticipantsList participants={session.participants} currentUserId={currentUser.id} />
-              </div>
-            </Card>
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
+          <div className="lg:col-span-3">
+            <ParticipantsList
+              participants={session.participants}
+              currentUserId={currentUser.id}
+            />
+          </div>
 
-            <Card>
-              <div className="p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <h2 className="font-semibold">Stories</h2>
-                  {isCurrentUserHost && (
-                    <Dialog open={isAddStoryDialogOpen} onOpenChange={setIsAddStoryDialogOpen}>
-                      <DialogTrigger asChild>
-                        <Button size="sm" variant="outline">+ Add</Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Add New Story</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4 mt-2">
-                          <div>
-                            <Label htmlFor="story-title">Title</Label>
-                            <Input
-                              id="story-title"
-                              value={newStoryTitle}
-                              onChange={(e) => setNewStoryTitle(e.target.value)}
-                              placeholder="Enter story title"
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor="story-description">Description (optional)</Label>
-                            <Textarea
-                              id="story-description"
-                              value={newStoryDescription}
-                              onChange={(e) => setNewStoryDescription(e.target.value)}
-                              placeholder="Enter story description"
-                            />
-                          </div>
-                          <Button className="w-full" onClick={handleAddStory}>Add Story</Button>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
-                  )}
-                </div>
-                <Separator className="my-2" />
-                <StoryList
-                  stories={session.stories}
-                  currentStoryId={session.currentStoryId}
+          <div className="lg:col-span-6">
+            <Card className="mb-8">
+              <div className="p-6">
+                <StoryDetail
+                  story={currentStory}
                   isHost={isCurrentUserHost}
+                  onStartTimer={startTimer}
+                  timeLeft={timeLeft}
+                  timerActive={timerActive}
                 />
               </div>
             </Card>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-semibold">Stories</h2>
+                <Dialog open={isAddStoryDialogOpen} onOpenChange={setIsAddStoryDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button>Add Story</Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Add New Story</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 pt-4">
+                      <div>
+                        <Label htmlFor="title">Title</Label>
+                        <Input
+                          id="title"
+                          value={newStoryTitle}
+                          onChange={(e) => setNewStoryTitle(e.target.value)}
+                          placeholder="Enter story title"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="description">Description</Label>
+                        <Textarea
+                          id="description"
+                          value={newStoryDescription}
+                          onChange={(e) => setNewStoryDescription(e.target.value)}
+                          placeholder="Enter story description"
+                        />
+                      </div>
+                      <Button onClick={handleAddStory} className="w-full">
+                        Add Story
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </div>
+
+            </div>
           </div>
 
-          {/* Main content */}
           <div className="lg:col-span-3">
-            <Card className="p-4">
-              <Tabs value={selectedTab} onValueChange={setSelectedTab}>
-                <TabsList className="mb-4">
-                  <TabsTrigger value="voting">Voting</TabsTrigger>
-                  <TabsTrigger value="history">History</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="voting">
-                  {currentStory ? (
-                    <div>
-                      <StoryDetail
-                        story={currentStory}
-                        isHost={isCurrentUserHost}
-                        isRevealDisabled={!session.isVotingComplete}
-                        hasVotesRevealed={session.hasVotesRevealed}
-                      />
-
-                      <Separator className="my-4" />
-
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <h3 className="font-medium">Your Vote</h3>
-                          {session.participants.some(p => p.hasVoted) && (
-                            <div className="text-sm text-muted-foreground">
-                              {session.participants.filter(p => p.hasVoted).length} of {session.participants.length} voted 👀
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-7 gap-4 items-start">
-                          {votingValues.map((value) => (
-                            <VotingCard
-                              key={value}
-                              value={value}
-                              disabled={!!session.hasVotesRevealed || !!currentStory.finalEstimate}
-                              selected={currentStory.votes?.[currentUser.id] === value}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-center py-12 text-muted-foreground">
-                      {session.stories.length === 0 ? (
-                        <p>No stories added yet. {isCurrentUserHost && 'Add a story to get started.'}</p>
-                      ) : (
-                        <p>{isCurrentUserHost
-                          ? 'Select a story to begin voting.'
-                          : 'Waiting for the moderator to select a story.'}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </TabsContent>
-
-                <TabsContent value="history">
-                  <div className="space-y-4">
-                    {session.stories.filter(story => story.finalEstimate).map((story: Story) => (
-                      <Card key={story.id} className="p-4">
-                        <div className="flex justify-between">
-                          <div>
-                            <h3 className="font-semibold">{story.title}</h3>
-                            {story.description && (
-                              <p className="text-sm text-muted-foreground">{story.description}</p>
-                            )}
-                          </div>
-                          <div className="bg-primary text-primary-foreground text-lg font-bold h-10 w-10 flex items-center justify-center rounded-md">
-                            {story.finalEstimate}
-                          </div>
-                        </div>
-                      </Card>
-                    ))}
-
-                    {session.stories.filter(story => story.finalEstimate).length === 0 && (
-                      <div className="text-center py-8 text-muted-foreground">
-                        <p>No completed estimations yet.</p>
-                      </div>
-                    )}
-                  </div>
-                </TabsContent>
-              </Tabs>
+            <Card>
+              <div className="p-6">
+                <h3 className="mb-4 text-lg font-semibold">Voting</h3>
+                <div className="grid grid-cols-3 gap-2">
+                  {votingValues.map((value) => (
+                    <VotingCard key={value} value={value} />
+                  ))}
+                </div>
+              </div>
             </Card>
           </div>
+          <JiraImportModal
+            open={isJiraImportModalOpen}
+            onClose={() => setIsJiraImportModalOpen(false)}
+            onStoriesImported={(stories: any) => {
+              stories.forEach(story => addStory(story.fields.summary, story.fields.description || ''));
+              setIsJiraImportModalOpen(false);
+            }}
+          />
         </div>
       </div>
     </div>

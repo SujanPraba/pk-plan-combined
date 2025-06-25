@@ -59,6 +59,7 @@ export const PokerProvider = ({ children }: PokerProviderProps) => {
   });
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   // Save session and user data to localStorage whenever they change
   useEffect(() => {
@@ -85,53 +86,41 @@ export const PokerProvider = ({ children }: PokerProviderProps) => {
     });
 
     // Set up socket event listeners
-    const setupSocketListeners = (socket: Socket) => {
-      socket.on('session_created', (data: PokerSession) => {
-        console.log('Session created:', data);
-        const transformedSession = {
-          ...data,
-          id: data.sessionId,
-        };
-        setSession(transformedSession);
-        if (data.participants && data.participants.length > 0) {
-          const host = data.participants.find(p => p.isHost);
-          if (host) {
-            setCurrentUser(host);
-          }
-        }
+    const setupSocketListeners = (socketInstance: Socket) => {
+      socketInstance.on('session_created', (newSession: PokerSession) => {
+        setSession(newSession);
+        setCurrentUser(newSession.participants.find(p => p.isHost));
         setLoading(false);
       });
 
-      socket.on('session_joined', (data: { session: PokerSession; user: User }) => {
-        console.log('Session joined:', data);
-        const transformedSession = {
-          ...data.session,
-          id: data.session.sessionId,
-        };
-        setSession(transformedSession);
+      socketInstance.on('session_joined', (data: { session: PokerSession; user: User }) => {
+        setSession(data.session);
         setCurrentUser(data.user);
         setLoading(false);
       });
 
-      socket.on('session_updated', (data: PokerSession) => {
-        console.log('Session updated:', data);
-        const transformedSession = {
-          ...data,
-          id: data.sessionId,
-        };
-        setSession(transformedSession);
+      socketInstance.on('session_updated', (updatedSession: PokerSession) => {
+        setSession(updatedSession);
+        // Update current user's data from the updated session
+        if (currentUser) {
+          const updatedUser = updatedSession.participants.find(p => p.id === currentUser.id);
+          if (updatedUser) {
+            setCurrentUser(updatedUser);
+          }
+        }
       });
 
-      socket.on('session_left', () => {
-        console.log('Left session');
+      socketInstance.on('session_left', () => {
+        // Clear all session data
         setSession(null);
         setCurrentUser(null);
-        setLoading(false);
+        localStorage.removeItem('pokerSession');
+        localStorage.removeItem('pokerUser');
+        navigate('/');
       });
 
-      socket.on('error', (message: string) => {
-        console.error('Socket error:', message);
-        setError(message);
+      socketInstance.on('error', (error: string) => {
+        setError(error);
         setLoading(false);
       });
     };
@@ -165,7 +154,7 @@ export const PokerProvider = ({ children }: PokerProviderProps) => {
       socketInstance.removeAllListeners();
       socketInstance.disconnect();
     };
-  }, [session?.sessionId, currentUser?.id]); // Add dependencies to re-establish connection when needed
+  }, [session?.sessionId, currentUser?.id, navigate]); // Add dependencies to re-establish connection when needed
 
   const createSession = (name: string, votingSystem: 'fibonacci' | 'tshirt', username: string) => {
     if (!socket) return;

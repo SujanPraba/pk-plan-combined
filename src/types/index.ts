@@ -5,6 +5,7 @@ export interface User {
   name: string;
   isHost: boolean;
   hasVoted?: boolean;
+  sessionId: string;
 }
 
 export interface Story {

@@ -11,6 +11,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.JiraService = void 0;
 const common_1 = require("@nestjs/common");
+<<<<<<< HEAD
 const jira_client_1 = __importDefault(require("jira-client"));
 const node_fetch_1 = __importDefault(require("node-fetch"));
 let JiraService = class JiraService {
@@ -36,24 +37,90 @@ let JiraService = class JiraService {
             const response = await (0, node_fetch_1.default)(`https://${credentials.host}/rest/api/3/project/search?maxResults=200`, {
                 method: 'GET',
                 headers: this.getAuthHeaders(credentials)
+=======
+const config_1 = require("@nestjs/config");
+const axios_1 = __importDefault(require("axios"));
+const crypto_1 = require("crypto");
+let JiraService = class JiraService {
+    constructor(configService) {
+        this.configService = configService;
+        this.clientId = this.configService.get('JIRA_CLIENT_ID');
+        this.clientSecret = this.configService.get('JIRA_CLIENT_SECRET');
+        this.redirectUri = this.configService.get('JIRA_REDIRECT_URI');
+    }
+    getAuthUrl() {
+        const state = (0, crypto_1.randomBytes)(16).toString('hex');
+        const scopes = [
+            'read:jira-work',
+            'manage:jira-project',
+            'manage:jira-configuration',
+            'read:jira-user',
+            'write:jira-work',
+            'manage:jira-webhook',
+            'manage:jira-data-provider'
+        ];
+        const authUrl = new URL('https://auth.atlassian.com/authorize');
+        authUrl.searchParams.append('audience', 'api.atlassian.com');
+        authUrl.searchParams.append('client_id', this.clientId);
+        authUrl.searchParams.append('scope', scopes.join(' '));
+        authUrl.searchParams.append('redirect_uri', this.redirectUri);
+        authUrl.searchParams.append('state', state);
+        authUrl.searchParams.append('response_type', 'code');
+        authUrl.searchParams.append('prompt', 'consent');
+        return { url: authUrl.toString(), state };
+    }
+    async exchangeCodeForToken(code) {
+        try {
+            const response = await axios_1.default.post('https://auth.atlassian.com/oauth/token', {
+                grant_type: 'authorization_code',
+                client_id: this.clientId,
+                client_secret: this.clientSecret,
+                code,
+                redirect_uri: this.redirectUri,
             });
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            const data = await response.json();
-            return data.values.map(project => ({
+            return {
+                access_token: response.data.access_token,
+                refresh_token: response.data.refresh_token,
+                expires_in: response.data.expires_in,
+            };
+        }
+        catch (error) {
+            throw new common_1.UnauthorizedException('Failed to exchange code for token');
+        }
+    }
+    async getAccessibleResources(accessToken) {
+        try {
+            const response = await axios_1.default.get('https://api.atlassian.com/oauth/token/accessible-resources', {
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                },
+>>>>>>> eab6665975a1c83a54b7300a44f3ea72f0f4a69d
+            });
+            return response.data;
+        }
+        catch (error) {
+            throw new common_1.UnauthorizedException('Failed to get Jira instances');
+        }
+    }
+    async getProjects(cloudId, accessToken) {
+        try {
+            const response = await axios_1.default.get(`https://api.atlassian.com/ex/jira/${cloudId}/rest/api/3/project`, {
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                },
+            });
+            return response.data.map(project => ({
                 id: project.id,
                 key: project.key,
                 name: project.name,
-                lead: project.lead ? project.lead.displayName : null,
-                avatarUrl: project.avatarUrls ? project.avatarUrls['48x48'] : null
+                projectTypeKey: project.projectTypeKey,
             }));
         }
         catch (error) {
-            this.handleJiraError(error);
-            throw new common_1.BadRequestException('Failed to fetch Jira projects');
+            throw new common_1.UnauthorizedException('Failed to get projects');
         }
     }
+<<<<<<< HEAD
     async getAllUsers(credentials) {
         try {
             const jira = this.getJiraClient(credentials);
@@ -105,18 +172,72 @@ let JiraService = class JiraService {
             const response = await (0, node_fetch_1.default)(`https://${credentials.host}/rest/agile/1.0/board?projectKeyOrId=${projectKeyOrId}`, {
                 method: 'GET',
                 headers: this.getAuthHeaders(credentials)
+=======
+    async getSprints(projectId, cloudId, accessToken) {
+        try {
+            const boardsResponse = await axios_1.default.get(`https://api.atlassian.com/ex/jira/${cloudId}/rest/agile/1.0/board`, {
+                params: { projectKeyOrId: projectId },
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                },
             });
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+            const sprints = [];
+            for (const board of boardsResponse.data.values) {
+                const sprintsResponse = await axios_1.default.get(`https://api.atlassian.com/ex/jira/${cloudId}/rest/agile/1.0/board/${board.id}/sprint`, {
+                    headers: {
+                        Authorization: `Bearer ${accessToken}`,
+                    },
+                });
+                sprints.push(...sprintsResponse.data.values);
             }
-            const data = await response.json();
-            return data.values;
+            return sprints.map(sprint => ({
+                id: sprint.id,
+                name: sprint.name,
+                state: sprint.state,
+                startDate: sprint.startDate,
+                endDate: sprint.endDate,
+                boardId: sprint.originBoardId,
+            }));
         }
         catch (error) {
-            this.handleJiraError(error);
-            throw new common_1.BadRequestException('Failed to fetch boards');
+            throw new common_1.UnauthorizedException('Failed to get sprints');
         }
     }
+    async getStoriesFromSprint(sprintId, cloudId, accessToken) {
+        try {
+            const response = await axios_1.default.get(`https://api.atlassian.com/ex/jira/${cloudId}/rest/agile/1.0/sprint/${sprintId}/issue`, {
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                },
+                params: {
+                    fields: [
+                        'summary',
+                        'description',
+                        'priority',
+                        'status',
+                        'assignee',
+                        'customfield_10026',
+                        'labels',
+                    ].join(','),
+                },
+>>>>>>> eab6665975a1c83a54b7300a44f3ea72f0f4a69d
+            });
+            return response.data.issues.map(issue => ({
+                id: issue.key,
+                summary: issue.fields.summary,
+                description: issue.fields.description,
+                storyPoints: issue.fields.customfield_10026,
+                priority: issue.fields.priority?.name,
+                assignee: issue.fields.assignee?.emailAddress,
+                status: issue.fields.status.name,
+                labels: issue.fields.labels,
+            }));
+        }
+        catch (error) {
+            throw new common_1.UnauthorizedException('Failed to get stories');
+        }
+    }
+<<<<<<< HEAD
     async getSprints(credentials, boardId) {
         try {
             const response = await (0, node_fetch_1.default)(`https://${credentials.host}/rest/agile/1.0/board/${boardId}/sprint`, {
@@ -243,6 +364,8 @@ let JiraService = class JiraService {
         }
         console.error('Jira API error:', error.message);
     }
+=======
+>>>>>>> eab6665975a1c83a54b7300a44f3ea72f0f4a69d
 };
 exports.JiraService = JiraService;
 exports.JiraService = JiraService = __decorate([

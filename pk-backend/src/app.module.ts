@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { DiscoveryModule } from '@nestjs/core';
 import databaseConfig from './config/database.config';
 import jiraConfig from './config/jira.config';
 import { DatabaseModule } from './database/database.module';
-import { JiraModule } from './jira/jira.module';
 import { Session } from './session/entities/session.entity';
 import { Story } from './session/entities/story.entity';
 import { User } from './session/entities/user.entity';
@@ -14,6 +14,7 @@ import { RetroModule } from './retro/retro.module';
 import { RetroSession } from './retro/entities/retro-session.entity';
 import { RetroUser } from './retro/entities/retro-user.entity';
 import { RetroItem } from './retro/entities/retro-item.entity';
+import { JiraModule } from './jira/jira.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { RetroItem } from './retro/entities/retro-item.entity';
       isGlobal: true,
       load: [databaseConfig, jiraConfig],
     }),
+    DiscoveryModule,
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -43,8 +45,10 @@ import { RetroItem } from './retro/entities/retro-item.entity';
     DatabaseModule,
     SessionModule,
     SocketModule,
-    JiraModule,
     RetroModule,
+    JiraModule,
+    TypeOrmModule.forFeature([Story, Session]),
   ],
+  exports: [DiscoveryModule],
 })
 export class AppModule {}

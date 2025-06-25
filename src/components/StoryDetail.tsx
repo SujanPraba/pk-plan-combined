@@ -1,17 +1,28 @@
-
 import { Button } from "@/components/ui/button";
 import { usePoker } from "@/contexts/PokerContext";
 import { Story } from "@/types";
+import { Clock } from "lucide-react";
 
 interface StoryDetailProps {
   story: Story;
   isHost: boolean;
   isRevealDisabled?: boolean;
   hasVotesRevealed?: boolean;
+  onStartTimer: (seconds: number) => void;
+  timeLeft: number;
+  timerActive: boolean;
 }
 
-const StoryDetail = ({ story, isHost, isRevealDisabled, hasVotesRevealed }: StoryDetailProps) => {
+const StoryDetail = ({ story, isHost, isRevealDisabled, hasVotesRevealed, onStartTimer, timeLeft, timerActive }: StoryDetailProps) => {
   const { revealVotes, finishVoting, nextStory } = usePoker();
+
+  if (!story) {
+    return (
+      <div className="text-center py-4 text-muted-foreground">
+        No story selected
+      </div>
+    );
+  }
 
   const handleReveal = () => {
     if (isHost) {
@@ -119,13 +130,23 @@ const StoryDetail = ({ story, isHost, isRevealDisabled, hasVotesRevealed }: Stor
       )}
 
       {isHost && !hasVotesRevealed && (
-        <Button
-          onClick={handleReveal}
-          // disabled={isRevealDisabled}
-          className="mt-2"
-        >
-          Reveal Votes
-        </Button>
+        <div className="flex gap-2 mt-2">
+          {timerActive ? (
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4" />
+              <span>{timeLeft}s</span>
+            </div>
+          ) : (
+            <>
+              <Button size="sm" variant="outline" onClick={() => onStartTimer(30)}>30s</Button>
+              <Button size="sm" variant="outline" onClick={() => onStartTimer(60)}>1m</Button>
+              <Button size="sm" variant="outline" onClick={() => onStartTimer(120)}>2m</Button>
+            </>
+          )}
+          <Button onClick={handleReveal} disabled={isRevealDisabled}>
+            Reveal Votes
+          </Button>
+        </div>
       )}
     </div>
   );

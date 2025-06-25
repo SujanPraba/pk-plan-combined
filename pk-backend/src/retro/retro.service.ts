@@ -192,41 +192,42 @@ export class RetroService {
     return this.findBySessionId(sessionId);
   }
 
-  async removeParticipant(sessionId: string, userId: string): Promise<RetroSessionWithRelations | null> {
-    // First verify the user exists
-    const user = await this.retroUserRepository.findOne({
-      where: { id: userId, sessionId }
-    });
+  async removeParticipant(sessionId: string, userId: string): Promise<RetroSession | null> {
+    try {
+      // Get the user before deleting
+      const user = await this.retroUserRepository.findOne({
+        where: { id: userId, sessionId }
+      });
 
-    if (!user) {
-      this.logger.warn(`User ${userId} not found in session ${sessionId}`);
+      if (!user) {
+        this.logger.warn(`User ${userId} not found in session ${sessionId}`);
+        return this.findBySessionId(sessionId);
+      }
+
+      // Delete the user
+      await this.retroUserRepository.delete({ id: userId, sessionId });
+
+      // Get remaining participants
+      const remainingParticipants = await this.retroUserRepository.find({ where: { sessionId } });
+
+      // If this was the last participant, delete the session and all its items
+      if (remainingParticipants.length === 0) {
+        await this.retroItemRepository.delete({ sessionId });
+        await this.retroSessionRepository.delete({ sessionId });
+        return null;
+      }
+
+      // If the leaving user was the host, assign host role to the next participant
+      if (user.isHost && remainingParticipants.length > 0) {
+        const newHost = remainingParticipants[0];
+        await this.retroUserRepository.update({ id: newHost.id }, { isHost: true });
+      }
+
       return this.findBySessionId(sessionId);
+    } catch (error) {
+      this.logger.error(`Error removing participant: ${error.message}`);
+      throw error;
     }
-
-    // Delete the user
-    await this.retroUserRepository.delete({ id: userId, sessionId });
-
-    const session = await this.findBySessionId(sessionId);
-
-    // If this was the last participant, delete the session
-    if (session.participants.length === 0) {
-      await this.retroSessionRepository.delete({ sessionId });
-      await this.retroItemRepository.delete({ sessionId });
-      return null;
-    }
-
-    // If the removed user was the host and there are other participants,
-    // make the next participant the host
-    if (user.isHost && session.participants.length > 0) {
-      const newHost = session.participants[0];
-      await this.retroUserRepository.update(
-        { id: newHost.id },
-        { isHost: true }
-      );
-      return this.findBySessionId(sessionId);
-    }
-
-    return session;
   }
 
   async addCategory(sessionId: string, categoryName: string): Promise<RetroSessionWithRelations> {
@@ -292,7 +293,7 @@ export class RetroService {
 
     // Items by Category in Columns
     csvContent += 'Retro Items By Category\n';
-    
+
     // Get maximum number of items in any category
     const itemsByCategory = session.categories.map(category => ({
       category,
