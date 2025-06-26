@@ -44,20 +44,13 @@ const Session = () => {
   const state = searchParams.get('state');
   const code = searchParams.get('code');
 
-  console.log('State:', state);
-  console.log('Code:', code);
-
-
-const stateFromLocalStorage = localStorage.getItem('state');
-const codeFromLocalStorage = localStorage.getItem('code');
-
   useEffect(() => {
-    if (stateFromLocalStorage && stateFromLocalStorage && state && code) {
+    // Only handle Jira callback if both state and code are present and we don't have them in localStorage
+    if (state && code && (!localStorage.getItem('state') || !localStorage.getItem('code'))) {
       localStorage.setItem('state', state);
       localStorage.setItem('code', code);
     }
-  }, [state, code]);
-
+  }, []); // Empty dependency array to run only once when component mounts
 
   useEffect(() => {
     if (!session || !currentUser) {
@@ -66,7 +59,9 @@ const codeFromLocalStorage = localStorage.getItem('code');
   }, [session, currentUser, navigate]);
 
   useEffect(() => {
-    if (!socket) return;
+    if (!socket) {
+      return;
+    }
 
     socket.on('timer_update', (seconds: number) => {
       setTimeLeft(seconds);
@@ -80,7 +75,8 @@ const codeFromLocalStorage = localStorage.getItem('code');
 
   const handleCopySessionId = () => {
     if (!session) return;
-    navigator.clipboard.writeText(session.id);
+    const shortSessionId = session.id.substring(0, 6).toUpperCase();
+    navigator.clipboard.writeText(shortSessionId);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -129,7 +125,10 @@ const codeFromLocalStorage = localStorage.getItem('code');
   };
 
   const handleLeaveSession = () => {
+    localStorage.removeItem('pokerSession');
+    localStorage.removeItem('pokerUser');
     leaveSession();
+    navigate('/');
   };
 
   if (!session || !currentUser) {
@@ -145,7 +144,7 @@ const codeFromLocalStorage = localStorage.getItem('code');
             <div className="mt-2 flex items-center gap-4">
               <div className="flex items-center gap-2">
                 <span className="text-sm text-gray-500">Session ID:</span>
-                <code className="rounded bg-gray-100 px-2 py-1 text-sm">{session.id}</code>
+                <code className="rounded bg-gray-100 px-2 py-1 text-sm">{session.sessionId}</code>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -253,7 +252,7 @@ const codeFromLocalStorage = localStorage.getItem('code');
           />
         </div>
 
-        
+
       </div>
     </div>
   );

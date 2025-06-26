@@ -64,53 +64,86 @@ export const PokerProvider = ({ children }: PokerProviderProps) => {
   // Save session and user data to localStorage whenever they change
   useEffect(() => {
     if (session) {
+      console.log('Saving session to localStorage:', JSON.stringify(session, null, 2));
       localStorage.setItem('pokerSession', JSON.stringify(session));
     } else {
+      console.log('Clearing session from localStorage');
       localStorage.removeItem('pokerSession');
     }
   }, [session]);
 
   useEffect(() => {
     if (currentUser) {
+      console.log('Saving user to localStorage:', JSON.stringify(currentUser, null, 2));
       localStorage.setItem('pokerUser', JSON.stringify(currentUser));
     } else {
+      console.log('Clearing user from localStorage');
       localStorage.removeItem('pokerUser');
     }
   }, [currentUser]);
 
   useEffect(() => {
     console.log('Connecting to socket server...');
+    let isComponentMounted = true;
+
     const socketInstance = io('http://localhost:3000', {
       transports: ['websocket'],
       reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 20000,
     });
 
-    // Set up socket event listeners
     const setupSocketListeners = (socketInstance: Socket) => {
       socketInstance.on('session_created', (newSession: PokerSession) => {
+        if (!isComponentMounted) return;
+        console.log('Session created event received:', JSON.stringify(newSession, null, 2));
+        // Clear any existing session data first
+        localStorage.removeItem('pokerSession');
+        localStorage.removeItem('pokerUser');
         setSession(newSession);
-        setCurrentUser(newSession.participants.find(p => p.isHost));
+        const host = newSession.participants.find(p => p.isHost);
+        console.log('Setting current user as host:', JSON.stringify(host, null, 2));
+        setCurrentUser(host);
         setLoading(false);
       });
 
       socketInstance.on('session_joined', (data: { session: PokerSession; user: User }) => {
+        if (!isComponentMounted) return;
+        console.log('Session joined event received:', JSON.stringify(data, null, 2));
+        // Clear any existing session data first
+        localStorage.removeItem('pokerSession');
+        localStorage.removeItem('pokerUser');
         setSession(data.session);
         setCurrentUser(data.user);
         setLoading(false);
       });
 
       socketInstance.on('session_updated', (updatedSession: PokerSession) => {
+        if (!isComponentMounted) return;
+        // Only update if this update is for our current session
+        if (session && session.id !== updatedSession.id) {
+          console.log('Ignoring update for different session', {
+            currentSessionId: session.id,
+            updatedSessionId: updatedSession.id
+          });
+          return;
+        }
+        console.log('Session updated event received:', JSON.stringify(updatedSession, null, 2));
         setSession(updatedSession);
-        // Update current user's data from the updated session
         if (currentUser) {
           const updatedUser = updatedSession.participants.find(p => p.id === currentUser.id);
           if (updatedUser) {
+            console.log('Updating current user:', JSON.stringify(updatedUser, null, 2));
             setCurrentUser(updatedUser);
           }
         }
       });
 
       socketInstance.on('session_left', () => {
+        if (!isComponentMounted) return;
+        console.log('Session left event received');
         // Clear all session data
         setSession(null);
         setCurrentUser(null);
@@ -119,8 +152,17 @@ export const PokerProvider = ({ children }: PokerProviderProps) => {
         navigate('/');
       });
 
-      socketInstance.on('error', (error: string) => {
-        setError(error);
+      socketInstance.on('disconnect', (reason) => {
+        console.log('Socket disconnected:', reason);
+        if (reason === 'io server disconnect') {
+          // the disconnection was initiated by the server, reconnect manually
+          socketInstance.connect();
+        }
+      });
+
+      socketInstance.on('connect_error', (err) => {
+        console.error('Socket connection error:', err.message);
+        setError('Failed to connect to the server. Please check if the server is running.');
         setLoading(false);
       });
     };
@@ -130,34 +172,32 @@ export const PokerProvider = ({ children }: PokerProviderProps) => {
 
     socketInstance.on('connect', () => {
       console.log('Socket connected successfully');
-      // Re-setup listeners on reconnection
-      setupSocketListeners(socketInstance);
-      
-      // Rejoin session room if we have an active session
       if (session) {
+        console.log('Rejoining session:', session.id);
         socketInstance.emit('rejoin_session', {
-          sessionId: session.sessionId,
+          sessionId: session.id,
           userId: currentUser?.id
         });
       }
     });
 
-    socketInstance.on('connect_error', (err) => {
-      console.error('Socket connection error:', err);
-      setError('Failed to connect to the server. Please try again later.');
-    });
-
     setSocket(socketInstance);
 
     return () => {
-      console.log('Disconnecting socket...');
+      console.log('Cleaning up socket connection...');
+      isComponentMounted = false;
       socketInstance.removeAllListeners();
       socketInstance.disconnect();
     };
-  }, [session?.sessionId, currentUser?.id, navigate]); // Add dependencies to re-establish connection when needed
+  }, []); // Remove dependencies to prevent reconnection
 
   const createSession = (name: string, votingSystem: 'fibonacci' | 'tshirt', username: string) => {
     if (!socket) return;
+    // Clear existing session data from localStorage
+    localStorage.removeItem('pokerSession');
+    localStorage.removeItem('pokerUser');
+    setSession(null);
+    setCurrentUser(null);
     setLoading(true);
     setError(null);
     socket.emit('create_session', { name, votingSystem, username });
@@ -214,6 +254,12 @@ export const PokerProvider = ({ children }: PokerProviderProps) => {
 
   const leaveSession = () => {
     if (!socket || !session || !currentUser) return;
+    // Clear all session data first
+    localStorage.removeItem('pokerSession');
+    localStorage.removeItem('pokerUser');
+    setSession(null);
+    setCurrentUser(null);
+    // Emit leave session event to server
     socket.emit('leave_session', {
       sessionId: session.id,
       userId: currentUser.id
