@@ -2,16 +2,6 @@ import { JiraService } from './jira.service';
 export declare class JiraController {
     private readonly jiraService;
     constructor(jiraService: JiraService);
-<<<<<<< HEAD
-    private getCredentialsFromHeaders;
-    getProjects(headers: Record<string, string>): Promise<any[]>;
-    getUsers(headers: Record<string, string>): Promise<any[]>;
-    getStories(headers: Record<string, string>, sprintId: string): Promise<any[]>;
-    getEpicStories(headers: Record<string, string>, epicKey: string): Promise<any[]>;
-    getBoards(headers: Record<string, string>, projectId: string): Promise<any[]>;
-    getSprints(headers: Record<string, string>, boardId: string): Promise<any[]>;
-    getBacklogIssues(headers: Record<string, string>, projectId: string, search?: string, types?: string, priorities?: string, statuses?: string, labels?: string, assignee?: string, orderBy?: string, orderDirection?: 'ASC' | 'DESC'): Promise<any[]>;
-=======
     getAuthUrl(): Promise<{
         url: string;
         state: string;
@@ -34,5 +24,8 @@ export declare class JiraController {
         boardId: any;
     }[]>;
     getStories(sprintId: string, cloudId: string, req: any): Promise<any>;
->>>>>>> eab6665975a1c83a54b7300a44f3ea72f0f4a69d
+    handleJiraCallback(code: string, state: string): Promise<{
+        success: boolean;
+        data: import("./entities/jira_ouath_token.entity").JiraOAuthToken;
+    }>;
 }

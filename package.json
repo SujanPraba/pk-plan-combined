@@ -12,12 +12,9 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
-<<<<<<< HEAD
     "@nestjs/common": "^11.1.0",
     "@nestjs/config": "^4.0.2",
-=======
     "@modelcontextprotocol/sdk": "^1.13.1",
->>>>>>> eab6665975a1c83a54b7300a44f3ea72f0f4a69d
     "@radix-ui/react-accordion": "^1.2.0",
     "@radix-ui/react-alert-dialog": "^1.1.1",
     "@radix-ui/react-aspect-ratio": "^1.1.0",

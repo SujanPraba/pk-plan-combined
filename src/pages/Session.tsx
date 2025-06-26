@@ -16,7 +16,7 @@ import { FibonacciValue, Story, TShirtValue } from '@/types';
 import fileDownload from 'js-file-download';
 import { Check, Clock, Copy, Download } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 export interface JiraStory {
   id: string;
@@ -40,6 +40,24 @@ const Session = () => {
   const [timerActive, setTimerActive] = useState(false);
   const [isAddStoryDialogOpen, setIsAddStoryDialogOpen] = useState(false);
   const [isJiraImportModalOpen, setIsJiraImportModalOpen] = useState(false);
+  const [searchParams] = useSearchParams();
+  const state = searchParams.get('state');
+  const code = searchParams.get('code');
+
+  console.log('State:', state);
+  console.log('Code:', code);
+
+
+const stateFromLocalStorage = localStorage.getItem('state');
+const codeFromLocalStorage = localStorage.getItem('code');
+
+  useEffect(() => {
+    if (stateFromLocalStorage && stateFromLocalStorage && state && code) {
+      localStorage.setItem('state', state);
+      localStorage.setItem('code', code);
+    }
+  }, [state, code]);
+
 
   useEffect(() => {
     if (!session || !currentUser) {
@@ -234,6 +252,8 @@ const Session = () => {
             }}
           />
         </div>
+
+        
       </div>
     </div>
   );

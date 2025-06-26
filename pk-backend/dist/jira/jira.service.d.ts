@@ -1,36 +1,13 @@
-interface JiraCredentials {
-    host: string;
-    username: string;
-    apiToken: string;
-}
-interface BacklogFilter {
-    search?: string;
-    types?: string[];
-    priorities?: string[];
-    statuses?: string[];
-    labels?: string[];
-    assignee?: string;
-    orderBy?: string;
-    orderDirection?: 'ASC' | 'DESC';
-}
+import { ConfigService } from '@nestjs/config';
+import { JiraOAuthToken } from './entities/jira_ouath_token.entity';
+import { Repository } from 'typeorm';
 export declare class JiraService {
-<<<<<<< HEAD
-    private getJiraClient;
-    private getAuthHeaders;
-    getAllProjects(credentials: JiraCredentials): Promise<any[]>;
-    getAllUsers(credentials: JiraCredentials): Promise<any[]>;
-    getAllStoriesForSprint(credentials: JiraCredentials, sprintId: string): Promise<any[]>;
-    getStoriesForEpic(credentials: JiraCredentials, epicKey: string): Promise<any[]>;
-    getBoardsForProject(credentials: JiraCredentials, projectKeyOrId: string): Promise<any[]>;
-    getSprints(credentials: JiraCredentials, boardId: string): Promise<any[]>;
-    getBacklogIssues(credentials: JiraCredentials, projectKeyOrId: string, filter?: BacklogFilter): Promise<any[]>;
-    private handleJiraError;
-=======
     private readonly configService;
+    private readonly tokenRepo;
     private readonly clientId;
     private readonly clientSecret;
     private readonly redirectUri;
-    constructor(configService: ConfigService);
+    constructor(configService: ConfigService, tokenRepo: Repository<JiraOAuthToken>);
     getAuthUrl(): {
         url: string;
         state: string;
@@ -51,6 +28,5 @@ export declare class JiraService {
         boardId: any;
     }[]>;
     getStoriesFromSprint(sprintId: string, cloudId: string, accessToken: string): Promise<any>;
->>>>>>> eab6665975a1c83a54b7300a44f3ea72f0f4a69d
+    handleOAuthCallback(code: string, state: string, userId?: string): Promise<JiraOAuthToken>;
 }
-export {};

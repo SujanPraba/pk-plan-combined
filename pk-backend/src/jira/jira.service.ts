@@ -2,6 +2,9 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import { randomBytes } from 'crypto';
+import { JiraOAuthToken } from './entities/jira_ouath_token.entity';
+import { Repository } from 'typeorm';
+import { InjectRepository } from '@nestjs/typeorm';
 
 interface BacklogFilter {
   search?: string;        // Search in summary and description
@@ -20,7 +23,8 @@ export class JiraService {
   private readonly clientSecret: string;
   private readonly redirectUri: string;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(private readonly configService: ConfigService, @InjectRepository(JiraOAuthToken)
+  private readonly tokenRepo: Repository<JiraOAuthToken>) {
     this.clientId = this.configService.get<string>('JIRA_CLIENT_ID');
     this.clientSecret = this.configService.get<string>('JIRA_CLIENT_SECRET');
     this.redirectUri = this.configService.get<string>('JIRA_REDIRECT_URI');
@@ -184,5 +188,28 @@ export class JiraService {
     } catch (error) {
       throw new UnauthorizedException('Failed to get stories');
     }
+  }
+
+  async handleOAuthCallback(code: string, state: string, userId?: string) {
+    // 1. Exchange code for token
+    const tokenData = await this.exchangeCodeForToken(code);
+    console.log('tokenData', tokenData);
+    // 2. Get accessible resources (cloudId)
+    const resources = await this.getAccessibleResources(tokenData.access_token);
+    const cloudId = resources[0]?.id || '';
+
+    // 3. Save to DB
+    const tokenEntity = this.tokenRepo.create({
+      accessToken: tokenData.access_token,
+      refreshToken: tokenData.refresh_token,
+      expiresIn: tokenData.expires_in,
+      cloudId,
+      userId,
+      state,
+      rawResponse: JSON.stringify({ tokenData, resources }),
+    });
+    await this.tokenRepo.save(tokenEntity);
+
+    return tokenEntity;
   }
 } 
