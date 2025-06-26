@@ -1,10 +1,13 @@
 import { ConfigService } from '@nestjs/config';
+import { JiraOAuthToken } from './entities/jira_ouath_token.entity';
+import { Repository } from 'typeorm';
 export declare class JiraService {
     private readonly configService;
+    private readonly tokenRepo;
     private readonly clientId;
     private readonly clientSecret;
     private readonly redirectUri;
-    constructor(configService: ConfigService);
+    constructor(configService: ConfigService, tokenRepo: Repository<JiraOAuthToken>);
     getAuthUrl(): {
         url: string;
         state: string;
@@ -25,4 +28,5 @@ export declare class JiraService {
         boardId: any;
     }[]>;
     getStoriesFromSprint(sprintId: string, cloudId: string, accessToken: string): Promise<any>;
+    handleOAuthCallback(code: string, state: string, userId?: string): Promise<JiraOAuthToken>;
 }

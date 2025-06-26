@@ -50,4 +50,15 @@ export class JiraController {
   ) {
     return this.jiraService.getStoriesFromSprint(sprintId, cloudId, req.jiraToken);
   }
+
+  @Get('oauth/callback')
+async handleJiraCallback(
+  @Query('code') code: string,
+  @Query('state') state: string,
+) {
+  // Optionally get userId from req.user
+  const userId = "1";
+  const tokenEntity = await this.jiraService.handleOAuthCallback(code, state, userId);
+  return { success: true, data: tokenEntity };
+}
 }

@@ -24,4 +24,8 @@ export declare class JiraController {
         boardId: any;
     }[]>;
     getStories(sprintId: string, cloudId: string, req: any): Promise<any>;
+    handleJiraCallback(code: string, state: string): Promise<{
+        success: boolean;
+        data: import("./entities/jira_ouath_token.entity").JiraOAuthToken;
+    }>;
 }

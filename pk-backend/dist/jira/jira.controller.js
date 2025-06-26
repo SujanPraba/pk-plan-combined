@@ -38,6 +38,11 @@ let JiraController = class JiraController {
     async getStories(sprintId, cloudId, req) {
         return this.jiraService.getStoriesFromSprint(sprintId, cloudId, req.jiraToken);
     }
+    async handleJiraCallback(code, state) {
+        const userId = "1";
+        const tokenEntity = await this.jiraService.handleOAuthCallback(code, state, userId);
+        return { success: true, data: tokenEntity };
+    }
 };
 exports.JiraController = JiraController;
 __decorate([
@@ -90,6 +95,14 @@ __decorate([
     __metadata("design:paramtypes", [String, String, Object]),
     __metadata("design:returntype", Promise)
 ], JiraController.prototype, "getStories", null);
+__decorate([
+    (0, common_1.Get)('oauth/callback'),
+    __param(0, (0, common_1.Query)('code')),
+    __param(1, (0, common_1.Query)('state')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:returntype", Promise)
+], JiraController.prototype, "handleJiraCallback", null);
 exports.JiraController = JiraController = __decorate([
     (0, common_1.Controller)('api/jira'),
     __metadata("design:paramtypes", [jira_service_1.JiraService])

@@ -8,6 +8,9 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -17,9 +20,13 @@ const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const axios_1 = __importDefault(require("axios"));
 const crypto_1 = require("crypto");
+const jira_ouath_token_entity_1 = require("./entities/jira_ouath_token.entity");
+const typeorm_1 = require("typeorm");
+const typeorm_2 = require("@nestjs/typeorm");
 let JiraService = class JiraService {
-    constructor(configService) {
+    constructor(configService, tokenRepo) {
         this.configService = configService;
+        this.tokenRepo = tokenRepo;
         this.clientId = this.configService.get('JIRA_CLIENT_ID');
         this.clientSecret = this.configService.get('JIRA_CLIENT_SECRET');
         this.redirectUri = this.configService.get('JIRA_REDIRECT_URI');
@@ -158,10 +165,29 @@ let JiraService = class JiraService {
             throw new common_1.UnauthorizedException('Failed to get stories');
         }
     }
+    async handleOAuthCallback(code, state, userId) {
+        const tokenData = await this.exchangeCodeForToken(code);
+        console.log('tokenData', tokenData);
+        const resources = await this.getAccessibleResources(tokenData.access_token);
+        const cloudId = resources[0]?.id || '';
+        const tokenEntity = this.tokenRepo.create({
+            accessToken: tokenData.access_token,
+            refreshToken: tokenData.refresh_token,
+            expiresIn: tokenData.expires_in,
+            cloudId,
+            userId,
+            state,
+            rawResponse: JSON.stringify({ tokenData, resources }),
+        });
+        await this.tokenRepo.save(tokenEntity);
+        return tokenEntity;
+    }
 };
 exports.JiraService = JiraService;
 exports.JiraService = JiraService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [config_1.ConfigService])
+    __param(1, (0, typeorm_2.InjectRepository)(jira_ouath_token_entity_1.JiraOAuthToken)),
+    __metadata("design:paramtypes", [config_1.ConfigService,
+        typeorm_1.Repository])
 ], JiraService);
 //# sourceMappingURL=jira.service.js.map
